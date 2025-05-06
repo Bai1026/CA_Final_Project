@@ -17,12 +17,12 @@
 ## 二、輸入／輸出規格
 
 - **輸入**（RISC-V calling convention）
-- `a0` = `int** matrices`：N 個矩陣資料起始位址陣列
-- `a1` = `int* rows` ：每個矩陣的列數陣列
-- `a2` = `int* cols` ：每個矩陣的行數陣列
-- `a3` = `int count` ：矩陣個數 N
+   - `a0` = `int** matrices`：N 個矩陣資料起始位址陣列
+   - `a1` = `int* rows` ：每個矩陣的列數陣列
+   - `a2` = `int* cols` ：每個矩陣的行數陣列
+   - `a3` = `int count` ：矩陣個數 N
 - **輸出**
-- `a0` = `int* ret` ：計算後結果矩陣起始位址
+   - `a0` = `int* ret` ：計算後結果矩陣起始位址
 
 ---
 
@@ -38,11 +38,11 @@
 2. **編輯快取參數**
    修改 gem5_args.conf：
 
-```bash
-GEM5_ARGS = --l1i_size 16kB --l1i_assoc 4 \
-            --l1d_size 16kB --l1d_assoc 4 \
-            --l2_size 128kB --l2_assoc 8
-```
+   ```bash
+   GEM5_ARGS = --l1i_size 16kB --l1i_assoc 4 \
+               --l1d_size 16kB --l1d_assoc 4 \
+               --l2_size 128kB --l2_assoc 8
+   ```
 
 3. **實作核心演算法**
 
@@ -53,17 +53,17 @@ GEM5_ARGS = --l1i_size 16kB --l1i_assoc 4 \
 
 4. **編譯與功能驗證**
 
-```bash
-make g++_final
-make testbench_public
-```
+   ```bash
+   make g++_final
+   make testbench_public
+   ```
 
 5. **效能模擬與評分**
 
-```bash
-make gem5_public_all
-make score_public
-```
+   ```bash
+   make gem5_public_all
+   make score_public
+   ```
 
 6. **報告**
    - report.pdf（1–2 頁）：
