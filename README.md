@@ -53,17 +53,40 @@ GEM5_ARGS = --l1i_size 16kB --l1i_assoc 4 \
 
 4. **編譯與功能驗證**
 
-```bash
-make g++_final
-make testbench_public
-```
+- Compile main.cpp with matrix_chain_multiplication.s
+
+  ```bash
+  make g++_final
+  ```
+
+- then (This step might take a few minutes)
+
+  ```bash
+  make gem5_public_all
+  ```
+
+  - or
+
+  ```bash
+  make gem5_public ARGS=P0/P1/P2/P3/P4/P5
+  ```
 
 5. **效能模擬與評分**
 
-```bash
-make gem5_public_all
-make score_public
-```
+- Checking if generated answer.txt match golden.txt
+
+  ```bash
+  make testbench_public
+  ```
+
+then
+
+- Compute performance score based on performance formula
+  ❖ Read content from m5out/config.json and m5out/out_exec.txt
+
+  ```bash
+  make score_public
+  ```
 
 6. **報告**
    - report.pdf（1–2 頁）：
