@@ -1,358 +1,275 @@
 .text
+.globl matrix_multiply
 .globl matrix_chain_multiplication
+.globl malloc
 
+# 矩陣鏈乘法主函式
+# a0 = matrices (int **), a1 = rows (int *), a2 = cols (int *), a3 = count (int)
+# 返回值: a0 = 結果矩陣指標 (int *)
 matrix_chain_multiplication:
-    # 保存重要暫存器
-    addi sp, sp, -40
-    sw ra, 0(sp)
-    sw s0, 4(sp)
-    sw s1, 8(sp)
-    sw s2, 12(sp)
-    sw s3, 16(sp)
-    sw s4, 20(sp)
-    sw s5, 24(sp)
-    sw s6, 28(sp)
-    sw s7, 32(sp)
-    sw s8, 36(sp)
+    # 保存暫存器到堆疊 (確保 16 位元組對齊)
+    addi sp, sp, -48
+    sw ra, 44(sp)
+    sw s0, 40(sp)
+    sw s1, 36(sp)
+    sw s2, 32(sp)
+    sw s3, 28(sp)
+    sw s4, 24(sp)
+    sw s5, 20(sp)
+    sw s6, 16(sp)
+    sw s7, 12(sp)
+    sw s8, 8(sp)
+    sw s9, 4(sp)
     
-    # 將參數保存到保留暫存器中
-    mv s0, a0      # s0 = matrices
-    mv s1, a1      # s1 = rows
-    mv s2, a2      # s2 = cols
-    mv s3, a3      # s3 = count
+    mv s0, a0               # s0 = matrices
+    mv s1, a1               # s1 = rows
+    mv s2, a2               # s2 = cols
+    mv s3, a3               # s3 = count
     
-    # 動態配置記憶體給 dp 表格 (count x count)
-    li t0, 4       # 每個元素 4 位元組 (32-bit integers)
-    mul a0, s3, s3 # count * count
-    mul a0, a0, t0 # count * count * 4
-    jal ra, malloc
-    mv s4, a0      # s4 = dp 表格
+    # 檢查輸入參數是否有效
+    beqz s3, error_exit     # if count == 0, 錯誤
+    beqz s0, error_exit     # if matrices == NULL, 錯誤
+    beqz s1, error_exit     # if rows == NULL, 錯誤
+    beqz s2, error_exit     # if cols == NULL, 錯誤
     
-    # 動態配置記憶體給 brackets 表格 (用於保存最佳括號位置)
-    li t0, 4
-    mul a0, s3, s3
-    mul a0, a0, t0
-    jal ra, malloc
-    mv s5, a0      # s5 = brackets 表格
-
-    # 初始化 dp 表格
-    mv t0, s4      # t0 = dp 表格起始位址
-    li t1, 0       # t1 = 0, 迴圈計數器
-    mul t2, s3, s3 # t2 = count * count, 總元素數量
-init_dp_loop:
-    beq t1, t2, init_dp_done
-    sw zero, 0(t0)
-    addi t0, t0, 4
-    addi t1, t1, 1
-    j init_dp_loop
-init_dp_done:
-
-    # 初始化對角線元素為 0 (dp[i][i] = 0)
-    li t0, 0       # t0 = i
-diag_loop:
-    beq t0, s3, diag_done
-    mul t1, t0, s3 # t1 = i * count
-    add t1, t1, t0 # t1 = i * count + i
-    slli t1, t1, 2 # t1 = (i * count + i) * 4
-    add t1, t1, s4 # t1 = dp + (i * count + i) * 4
-    sw zero, 0(t1) # dp[i][i] = 0
-    addi t0, t0, 1
-    j diag_loop
-diag_done:
-
-    # 動態規劃求解最佳矩陣鏈相乘順序
-    li s6, 1       # s6 = len (鏈長度)
-len_loop:
-    beq s6, s3, len_done
-    li t0, 0       # t0 = i (起始矩陣索引)
-i_loop:
-    add t1, t0, s6 # t1 = j = i + len
-    bge t1, s3, i_done
+    # 如果只有一個矩陣，直接返回該矩陣的複製
+    li t0, 1
+    bne s3, t0, multiple_matrices
     
-    # dp[i][j] = min{dp[i][k] + dp[k+1][j] + rows[i] * cols[k] * cols[j]}
-    mul t2, t0, s3    # t2 = i * count
-    add t2, t2, t1    # t2 = i * count + j
-    slli t2, t2, 2    # t2 = (i * count + j) * 4
-    add t2, t2, s4    # t2 = &dp[i][j]
+    # 複製單一矩陣
+    lw s4, 0(s0)            # s4 = matrices[0]
+    beqz s4, error_exit     # 檢查矩陣指標是否有效
+    lw s5, 0(s1)            # s5 = rows[0]
+    lw s6, 0(s2)            # s6 = cols[0]
     
-    li t3, -1         # t3 = 初始最小值設為 -1 (表示還沒找到)
-    mv s7, t0         # s7 = k
-k_loop:
-    beq s7, t1, k_done
+    # 檢查維度是否有效
+    blez s5, error_exit     # if rows <= 0, 錯誤
+    blez s6, error_exit     # if cols <= 0, 錯誤
     
-    # 計算 dp[i][k]
-    mul t5, t0, s3    # t5 = i * count
-    add t5, t5, s7    # t5 = i * count + k
-    slli t5, t5, 2    # t5 = (i * count + k) * 4
-    add t5, t5, s4    # t5 = &dp[i][k]
-    lw t5, 0(t5)      # t5 = dp[i][k]
+    mul s7, s5, s6          # s7 = rows[0] * cols[0]
+    slli a0, s7, 2          # a0 = size in 位元組
     
-    # 計算 dp[k+1][j]
-    addi t6, s7, 1    # t6 = k + 1
-    mul t6, t6, s3    # t6 = (k + 1) * count
-    add t6, t6, t1    # t6 = (k + 1) * count + j
-    slli t6, t6, 2    # t6 = ((k + 1) * count + j) * 4
-    add t6, t6, s4    # t6 = &dp[k+1][j]
-    lw t6, 0(t6)      # t6 = dp[k+1][j]
+    # 呼叫 C malloc 函式
+    jal malloc
+    beqz a0, error_exit     # 檢查分配是否成功
+    mv s8, a0               # s8 = 新矩陣地址
     
-    # 計算 rows[i] * cols[k] * cols[j]
-    slli t4, t0, 2    # t4 = i * 4
-    add t4, t4, s1    # t4 = &rows[i]
-    lw a0, 0(t4)      # a0 = rows[i]
+    # 複製資料
+    mv t0, zero             # i = 0
+    slli s7, s7, 2          # s7 = total bytes
+copy_loop:
+    bge t0, s7, copy_done
+    add t1, s4, t0          # source address
+    lw t2, 0(t1)            # 載入來源資料
+    add t3, s8, t0          # dest address  
+    sw t2, 0(t3)            # 儲存到目標
+    addi t0, t0, 4          # i += 4
+    j copy_loop
     
-    slli t4, s7, 2    # t4 = k * 4
-    add t4, t4, s2    # t4 = &cols[k]
-    lw a1, 0(t4)      # a1 = cols[k]
+copy_done:
+    mv a0, s8               # 返回結果
+    j chain_mult_end
     
-    mul a0, a0, a1    # a0 = rows[i] * cols[k]
+multiple_matrices:
+    # 處理多個矩陣的情況 - 從左到右依序相乘
+    lw s4, 0(s0)            # s4 = matrices[0] (當前結果矩陣)
+    beqz s4, error_exit     # 檢查矩陣指標是否有效
+    lw s5, 0(s1)            # s5 = rows[0] (當前結果行數)
     
-    slli t4, t1, 2    # t4 = j * 4
-    add t4, t4, s2    # t4 = &cols[j]
-    lw a1, 0(t4)      # a1 = cols[j]
+    # 檢查維度是否有效
+    blez s5, error_exit     # if rows <= 0, 錯誤
     
-    mul a0, a0, a1    # a0 = rows[i] * cols[k] * cols[j]
+    # 先複製第一個矩陣作為初始結果
+    lw s6, 0(s2)            # s6 = cols[0]
+    mul s7, s5, s6          # s7 = rows[0] * cols[0]
+    slli a0, s7, 2          # a0 = size in 位元組
     
-    # 計算 cost = dp[i][k] + dp[k+1][j] + rows[i] * cols[k] * cols[j]
-    add a0, a0, t5    # a0 = rows[i] * cols[k] * cols[j] + dp[i][k]
-    add a0, a0, t6    # a0 = rows[i] * cols[k] * cols[j] + dp[i][k] + dp[k+1][j]
+    # 呼叫 C malloc 函式
+    jal malloc
+    beqz a0, error_exit     # 檢查分配是否成功
+    mv s4, a0               # s4 = 新的結果矩陣
     
-    # 如果 cost < min_cost 或 min_cost 還沒設定
-    li t5, -1
-    beq t3, t5, update_min
-    blt a0, t3, update_min
-    j skip_update
-update_min:
-    mv t3, a0         # 更新最小 cost
+    # 複製第一個矩陣的資料
+    lw s8, 0(s0)            # s8 = matrices[0]
+    mv t0, zero             # i = 0
+    slli s7, s7, 2          # s7 = total bytes
+copy_first_matrix:
+    bge t0, s7, first_copy_done
+    add t1, s8, t0          # source address
+    lw t2, 0(t1)            # 載入來源資料
+    add t3, s4, t0          # dest address
+    sw t2, 0(t3)            # 儲存到目標
+    addi t0, t0, 4          # i += 4
+    j copy_first_matrix
     
-    # 更新 brackets[i][j] = k
-    mul t5, t0, s3    # t5 = i * count
-    add t5, t5, t1    # t5 = i * count + j
-    slli t5, t5, 2    # t5 = (i * count + j) * 4
-    add t5, t5, s5    # t5 = &brackets[i][j]
-    sw s7, 0(t5)      # brackets[i][j] = k
-skip_update:
-    addi s7, s7, 1    # k++
-    j k_loop
-k_done:
+first_copy_done:
+    li s8, 1                # i = 1
+mult_loop:
+    bge s8, s3, mult_done   # if i >= count, 結束
     
-    # 存儲 dp[i][j] = min_cost
-    sw t3, 0(t2)
+    # 取得下一個矩陣
+    slli t0, s8, 2          # t0 = i * 4
+    add t0, s0, t0          # t0 = &matrices[i]
+    lw s9, 0(t0)            # s9 = matrices[i]
+    beqz s9, error_exit     # 檢查矩陣指標是否有效
     
-    addi t0, t0, 1    # i++
-    j i_loop
-i_done:
-    addi s6, s6, 1    # len++
-    j len_loop
-len_done:
-
-    # 根據 brackets 表格計算最終結果矩陣
-    li a0, 0          # i = 0
-    addi a1, s3, -1   # j = count - 1
-    mv a2, s5         # brackets 表格
-    jal ra, compute_matrix
-    mv s8, a0         # s8 = 結果矩陣
-
-    # 釋放 dp 表格記憶體
-    mv a0, s4
-    jal ra, free
+    # 取得維度
+    slli t1, s8, 2          # t1 = i * 4
+    add t1, s2, t1          # t1 = &cols[i]
+    lw s6, -4(t1)           # s6 = cols[i-1] (共同維度)
+    lw s7, 0(t1)            # s7 = cols[i] (結果列數)
     
-    # 釋放 brackets 表格記憶體
-    mv a0, s5
-    jal ra, free
+    # 檢查維度是否有效
+    blez s6, error_exit     # if n <= 0, 錯誤
+    blez s7, error_exit     # if l <= 0, 錯誤
     
-    # 返回結果矩陣
-    mv a0, s8
+    # 分配結果矩陣
+    mul t2, s5, s7          # t2 = rows * cols
+    slli a0, t2, 2          # a0 = size in 位元組
     
-    # 恢復暫存器
-    lw ra, 0(sp)
-    lw s0, 4(sp)
-    lw s1, 8(sp)
-    lw s2, 12(sp)
-    lw s3, 16(sp)
-    lw s4, 20(sp)
-    lw s5, 24(sp)
-    lw s6, 28(sp)
-    lw s7, 32(sp)
-    lw s8, 36(sp)
-    addi sp, sp, 40
+    # 呼叫 C malloc 函式
+    jal malloc
+    beqz a0, error_exit     # 檢查分配是否成功
     
+    # 保存結果矩陣地址
+    sw a0, 0(sp)            # 暫存結果矩陣地址
+    
+    # 執行矩陣乘法
+    mv a2, a0               # a2 = 結果矩陣
+    mv a0, s4               # a0 = 左矩陣
+    mv a1, s9               # a1 = 右矩陣
+    mv a3, s5               # a3 = m (左矩陣行數)
+    mv a4, s6               # a4 = n (共同維度)
+    mv a5, s7               # a5 = l (右矩陣列數)
+    jal matrix_multiply
+    
+    # 恢復結果矩陣地址並更新當前結果
+    lw s4, 0(sp)            # s4 = 新的結果矩陣
+    # s5 保持不變 (行數)
+    
+    addi s8, s8, 1          # i++
+    j mult_loop
+    
+mult_done:
+    mv a0, s4               # 返回最終結果
+    j chain_mult_end
+    
+error_exit:
+    mv a0, zero             # 返回 NULL
+    
+chain_mult_end:
+    lw s9, 4(sp)
+    lw s8, 8(sp)
+    lw s7, 12(sp)
+    lw s6, 16(sp)
+    lw s5, 20(sp)
+    lw s4, 24(sp)
+    lw s3, 28(sp)
+    lw s2, 32(sp)
+    lw s1, 36(sp)
+    lw s0, 40(sp)
+    lw ra, 44(sp)
+    addi sp, sp, 48
     jr ra
 
-# 輔助函式：計算矩陣鏈 [i...j] 的結果
-# a0 = i, a1 = j, a2 = brackets 表格
-# 返回：a0 = 計算結果矩陣
-compute_matrix:
-    # 保存暫存器
-    addi sp, sp, -20
-    sw ra, 0(sp)
-    sw s0, 4(sp)
-    sw s1, 8(sp)
-    sw s2, 12(sp)
-    sw s3, 16(sp)
-    
-    mv s0, a0      # s0 = i
-    mv s1, a1      # s1 = j
-    mv s2, a2      # s2 = brackets
-    # 需要主函式傳遞 count 參數
-    # 使用任一可用暫存器 (比如a3) 傳遞 count 參數
-    mv s3, a3      # s3 = count (需新增)
-    
-    # 如果 i == j，直接返回 matrices[i]
-    bne s0, s1, not_single
-    # 修正：正確計算 matrices[i] 的位址
-    # 假設 matrices 是指標陣列，每個元素為 4 位元組
-    slli t0, s0, 2    # t0 = i * 4
-    add t0, t0, s0_original_matrix_ptr  # 使用正確的矩陣基址 (傳入參數)
-    lw a0, 0(t0)      # a0 = matrices[i]
-    j compute_done
-not_single:
-    # 獲取 k = brackets[i][j]
-    mul t0, s0, s3    # t0 = i * count
-    add t0, t0, s1    # t0 = i * count + j
-    slli t0, t0, 2    # t0 = (i * count + j) * 4
-    add t0, t0, s2    # t0 = &brackets[i][j]
-    lw t0, 0(t0)      # t0 = k
-    
-    # 遞歸計算左子矩陣 (i, k)
-    mv a0, s0
-    mv a1, t0
-    mv a2, s2
-    mv a3, s3         # 傳遞 count 參數
-    mv a4, s0_original_matrix_ptr # 傳遞原始矩陣指標
-    jal ra, compute_matrix
-    mv t1, a0         # t1 = 左子矩陣
-    
-    # 遞歸計算右子矩陣 (k+1, j)
-    addi a0, t0, 1
-    mv a1, s1
-    mv a2, s2
-    mv a3, s3         # 傳遞 count 參數
-    mv a4, s0_original_matrix_ptr # 傳遞原始矩陣指標
-    jal ra, compute_matrix
-    mv t2, a0         # t2 = 右子矩陣
-    
-    # 矩陣乘法：t1 * t2
-    # 獲取左矩陣的維度
-    slli t3, s0, 2    # t3 = i * 4
-    add t3, t3, s1    # t3 = &rows[i]
-    lw a0, 0(t3)      # a0 = 左矩陣的列數
-    
-    slli t3, t0, 2    # t3 = k * 4
-    add t3, t3, s2    # t3 = &cols[k]
-    lw a1, 0(t3)      # a1 = 左矩陣的行數
-    
-    # 獲取右矩陣的維度
-    addi t4, t0, 1    # t4 = k + 1
-    slli t4, t4, 2    # t4 = (k + 1) * 4
-    add t4, t4, s1    # t4 = &rows[k+1]
-    lw a2, 0(t4)      # a2 = 右矩陣的列數
-    
-    slli t4, s1, 2    # t4 = j * 4
-    add t4, t4, s2    # t4 = &cols[j]
-    lw a3, 0(t4)      # a3 = 右矩陣的行數
-    
-    # 呼叫矩陣乘法
-    mv a4, t1         # a4 = 左矩陣
-    mv a5, t2         # a5 = 右矩陣
-    jal ra, matrix_multiply
-    
-compute_done:
-    # 恢復暫存器
-    lw ra, 0(sp)
-    lw s0, 4(sp)
-    lw s1, 8(sp)
-    lw s2, 12(sp)
-    addi sp, sp, 16
-    
-    jr ra
-
-# 矩陣乘法函式
-# a0 = 左矩陣的列數
-# a1 = 左矩陣的行數/右矩陣的列數
-# a3 = 右矩陣的行數
-# a4 = 左矩陣
-# a5 = 右矩陣
-# 返回：a0 = 結果矩陣
+# 矩陣乘法函式: matrix_multiply(int *A, int *B, int *C, int m, int n, int l)
+# a0 = A矩陣指標, a1 = B矩陣指標, a2 = C矩陣指標
+# a3 = m (A的行數), a4 = n (A的列數/B的行數), a5 = l (B的列數)
 matrix_multiply:
-    # 保存暫存器
-    addi sp, sp, -24
-    sw ra, 0(sp)
-    sw s0, 4(sp)
-    sw s1, 8(sp)
-    sw s2, 12(sp)
-    sw s3, 16(sp)
-    sw s4, 20(sp)
+    addi sp, sp, -32
+    sw ra, 28(sp)
+    sw s0, 24(sp)
+    sw s1, 20(sp)
+    sw s2, 16(sp)
+    sw s3, 12(sp)
+    sw s4, 8(sp)
+    sw s5, 4(sp)
     
-    mv s0, a0      # s0 = 左矩陣的列數
-    mv s1, a1      # s1 = 左矩陣的行數/右矩陣的列數
-    mv s2, a3      # s2 = 右矩陣的行數
-    mv s3, a4      # s3 = 左矩陣
-    mv s4, a5      # s4 = 右矩陣
+    # 檢查輸入參數
+    beqz a0, mult_error     # if A == NULL, 錯誤
+    beqz a1, mult_error     # if B == NULL, 錯誤
+    beqz a2, mult_error     # if C == NULL, 錯誤
+    blez a3, mult_error     # if m <= 0, 錯誤
+    blez a4, mult_error     # if n <= 0, 錯誤
+    blez a5, mult_error     # if l <= 0, 錯誤
     
-    # 分配結果矩陣記憶體 (s0 x s2)
-    mul a0, s0, s2    # a0 = 左矩陣的列數 * 右矩陣的行數
-    slli a0, a0, 2    # 每個元素 4 位元組
-    jal ra, malloc
-    mv t0, a0         # t0 = 結果矩陣
+    mv s0, a0               # s0 = A
+    mv s1, a1               # s1 = B
+    mv s2, a2               # s2 = C
+    mv s3, a3               # s3 = m
+    mv s4, a4               # s4 = n
+    mv s5, a5               # s5 = l
     
-    # 實作矩陣乘法
-    li t1, 0          # t1 = i (列迴圈)
-i_mult_loop:
-    beq t1, s0, i_mult_done
-    li t2, 0          # t2 = j (行迴圈)
-j_mult_loop:
-    beq t2, s2, j_mult_done
+    li t0, 0                # i = 0 (外層迴圈計數器)
     
-    li t3, 0          # t3 = 累積和
-    li t4, 0          # t4 = k (內層迴圈)
-k_mult_loop:
-    beq t4, s1, k_mult_done
+outer_loop:
+    bge t0, s3, end_outer   # if i >= m, 結束外層迴圈
+    li t1, 0                # j = 0 (中層迴圈計數器)
     
-    # 計算左矩陣元素位址 (i, k)
-    mul t5, t1, s1    # t5 = i * left_cols
-    add t5, t5, t4    # t5 = i * left_cols + k
-    slli t5, t5, 2    # t5 = (i * left_cols + k) * 4
-    add t5, t5, s3    # t5 = left + (i * left_cols + k) * 4
-    lw t5, 0(t5)      # t5 = left[i][k]
+middle_loop:
+    bge t1, s5, end_middle  # if j >= l, 結束中層迴圈
     
-    # 計算右矩陣元素位址 (k, j)
-    mul t6, t4, s2    # t6 = k * right_cols
-    add t6, t6, t2    # t6 = k * right_cols + j
-    slli t6, t6, 2    # t6 = (k * right_cols + j) * 4
-    add t6, t6, s4    # t6 = right + (k * right_cols + j) * 4
-    lw t6, 0(t6)      # t6 = right[k][j]
+    # 計算 C[i][j] 的地址
+    mul t2, t0, s5          # t2 = i * l
+    add t2, t2, t1          # t2 = i * l + j
+    slli t2, t2, 2          # t2 = (i * l + j) * 4 (位元組偏移)
+    add t2, s2, t2          # t2 = C + 偏移量
     
-    # 累積乘積
-    mul t6, t5, t6    # t6 = left[i][k] * right[k][j]
-    add t3, t3, t6    # t3 += left[i][k] * right[k][j]
+    sw zero, 0(t2)          # C[i][j] = 0
     
-    addi t4, t4, 1    # k++
-    j k_mult_loop
-k_mult_done:
+    li t3, 0                # k = 0 (內層迴圈計數器)
     
-    # 儲存結果
-    mul t4, t1, s2    # t4 = i * result_cols
-    add t4, t4, t2    # t4 = i * result_cols + j
-    slli t4, t4, 2    # t4 = (i * result_cols + j) * 4
-    add t4, t4, t0    # t4 = result + (i * result_cols + j) * 4
-    sw t3, 0(t4)      # result[i][j] = sum
+inner_loop:
+    bge t3, s4, end_inner   # if k >= n, 結束內層迴圈
     
-    addi t2, t2, 1    # j++
-    j j_mult_loop
-j_mult_done:
-    addi t1, t1, 1    # i++
-    j i_mult_loop
-i_mult_done:
+    # 計算 A[i][k] 的地址
+    mul t4, t0, s4          # t4 = i * n
+    add t4, t4, t3          # t4 = i * n + k
+    slli t4, t4, 2          # t4 = (i * n + k) * 4
+    add t4, s0, t4          # t4 = A + 偏移量
+    lw t4, 0(t4)            # t4 = A[i][k]
     
-    mv a0, t0         # 返回結果矩陣
+    # 計算 B[k][j] 的地址
+    mul t5, t3, s5          # t5 = k * l
+    add t5, t5, t1          # t5 = k * l + j
+    slli t5, t5, 2          # t5 = (k * l + j) * 4
+    add t5, s1, t5          # t5 = B + 偏移量
+    lw t5, 0(t5)            # t5 = B[k][j]
     
+    # 計算 A[i][k] * B[k][j]
+    mul t6, t4, t5          # t6 = A[i][k] * B[k][j]
+    
+    # C[i][j] += A[i][k] * B[k][j]
+    lw t4, 0(t2)            # 載入 C[i][j]
+    add t4, t4, t6          # C[i][j] += 乘積
+    sw t4, 0(t2)            # 儲存回 C[i][j]
+    
+    addi t3, t3, 1          # k++
+    j inner_loop
+    
+end_inner:
+    addi t1, t1, 1          # j++
+    j middle_loop
+    
+end_middle:
+    addi t0, t0, 1          # i++
+    j outer_loop
+    
+end_outer:
+    j mult_end
+    
+mult_error:
+    # 錯誤處理
+    nop
+    
+mult_end:
     # 恢復暫存器
-    lw ra, 0(sp)
-    lw s0, 4(sp)
-    lw s1, 8(sp)
-    lw s2, 12(sp)
-    lw s3, 16(sp)
-    lw s4, 20(sp)
-    addi sp, sp, 24
-    
+    lw s5, 4(sp)
+    lw s4, 8(sp)
+    lw s3, 12(sp)
+    lw s2, 16(sp)
+    lw s1, 20(sp)
+    lw s0, 24(sp)
+    lw ra, 28(sp)
+    addi sp, sp, 32
     jr ra
