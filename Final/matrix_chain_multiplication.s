@@ -60,7 +60,7 @@ DP_inner:
 	add t4, t0, s6
 	lw s5, 0(t3)		#	s5 = m[i, k]
 	lw s6, 0(t4)		#	s6 = m[k+1, j]
-	slli s7, s7, 2		#	s7 = i offset
+	slli s7, s2, 2		#	s7 = i offset
 	slli s8, s4, 2		#	s8 = k offset
 	slli s9, s3, 2		#	s9 = j offset
 	add s10, a2, s8
