@@ -9,7 +9,19 @@
 #	a3: count,	int
 
 matrix_chain_multiplication:
-	sw ra, 0(sp)
+    addi sp, sp, -48
+    sw ra, 44(sp)
+    sw s0, 40(sp)
+    sw s1, 36(sp)
+    sw s2, 32(sp)
+    sw s3, 28(sp)
+    sw s4, 24(sp)
+    sw s5, 20(sp)
+    sw s6, 16(sp)
+    sw s7, 12(sp)
+    sw s8, 8(sp)
+    sw s9, 4(sp)
+
 	addi s0, a3, 1		#	s0 = n+1
 	addi s1, x0, 0
 	addi s2, x0, 0
@@ -100,18 +112,30 @@ end_DP:
 	addi s5, x0, 0		#	s5 = col[left] = row[right]
 	addi s6, x0, 0		#	s6 = col[right]
 	mv t1, sp			#	t1 = table s address = original sp-2176
-						#	a1: rows, 	int*
-						#	a2: cols,	int*
-						#	a3: count,	int
-						#	a7: matrices, int**
+					#	a1: rows, 	int*
+					#	a2: cols,	int*
+					#	a3: count,	int
+					#	a7: matrices, int**
 
 	
 	jal ra, optimal_order
 	
 	addi sp, sp, 1088
 	addi sp, sp, 1088
-	lw ra, 0(sp)
-	jr ra
+	mv s2, a0
+    lw s9, 4(sp)
+    lw s8, 8(sp)
+  	lw s7, 12(sp)
+    lw s6, 16(sp)
+    lw s5, 20(sp)
+    lw s4, 24(sp)
+    lw s3, 28(sp)
+    lw s2, 32(sp)
+    lw s1, 36(sp)
+    lw s0, 40(sp)
+    lw ra, 44(sp)
+    addi sp, sp, 48
+    jr ra
 
 optimal_order:
 	addi sp, sp, -32
@@ -144,7 +168,7 @@ find_R:
 multiply_matrices:
 	mul a0, s4, s6
 	slli a0, a0, 2
-	jal malloc
+	call malloc
 	mv t0, a0			#	t0 = result address (ori t5)
 						# 	s4 = M = rows[i] (ori s3)
 						# 	s6 = N = cols[j] (ori s4)
@@ -212,13 +236,13 @@ end_x:
 	#beq s3, zero, store_right
 	beq s2, zero, store_left
 store_right:
-	mv s3, t5
+	mv s3, t0
 	mv s5, s4
 	lw s4, 16(sp)
 	addi sp, sp, 32
 	jr ra
 store_left:
-    mv s2, t5
+	mv s2, t0
 	mv s5, s6
 	lw s6, 24(sp)
 	addi sp, sp, 32
