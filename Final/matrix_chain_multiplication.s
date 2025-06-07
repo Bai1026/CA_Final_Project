@@ -115,7 +115,7 @@ end_DP:
 				#	a1: rows, 	int*
 				#	a2: cols,	int*
 				#	a3: count,	int
-				#	a7: matrices, int**
+	addi a7, a7, -4		#	a7: matrices, int**
 
 	jal ra, optimal_order
 	
